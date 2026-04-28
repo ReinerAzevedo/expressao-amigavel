@@ -3,12 +3,16 @@ export type AuditStatus = "pending" | "found" | "not_found";
 export interface Product {
   id: string;
   codigo: string;
+  codigoBarras?: string;
   descricao: string;
   quantidade: number;
   status: AuditStatus;
   qtdEncontrada?: number;
   auditor?: string;
   data?: string;
+  naAreaVenda?: boolean;
+  areaVendaAuditor?: string;
+  areaVendaData?: string;
 }
 
 const KEY_PRODUCTS = "audit:products";
