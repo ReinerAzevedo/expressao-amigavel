@@ -53,9 +53,13 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
         ).trim();
         const qtdRaw = pickField(row, ["quantidade", "qtd", "qty", "quantity"]);
         const quantidade = Number(qtdRaw) || 0;
+        const codigoBarras = String(
+          pickField(row, ["codigo de barras", "código de barras", "ean", "barcode", "gtin", "codbarras"]) ?? "",
+        ).trim() || undefined;
         return {
           id: `${codigo}-${i}-${Date.now()}`,
           codigo,
+          codigoBarras,
           descricao,
           quantidade,
           status: "pending" as const,
@@ -77,6 +81,7 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
     }
     const data = products.map((p) => ({
       Código: p.codigo,
+      "Código de Barras": p.codigoBarras ?? "",
       Descrição: p.descricao,
       "Qtd Esperada": p.quantidade,
       Status:
@@ -84,6 +89,9 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
       "Qtd Encontrada": p.qtdEncontrada ?? "",
       Auditor: p.auditor ?? "",
       Data: p.data ? new Date(p.data).toLocaleString("pt-BR") : "",
+      "Na Área de Venda": p.naAreaVenda ? "Sim" : "Não",
+      "Área Venda Por": p.areaVendaAuditor ?? "",
+      "Área Venda Em": p.areaVendaData ? new Date(p.areaVendaData).toLocaleString("pt-BR") : "",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();

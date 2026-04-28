@@ -3,7 +3,7 @@ import { Product } from "@/lib/auditStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, RotateCcw, PackageSearch } from "lucide-react";
+import { Check, X, RotateCcw, PackageSearch, Store } from "lucide-react";
 
 interface Props {
   product: Product;
@@ -37,6 +37,20 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
       qtdEncontrada: undefined,
       auditor,
       data: new Date().toISOString(),
+      naAreaVenda: false,
+      areaVendaAuditor: undefined,
+      areaVendaData: undefined,
+    });
+  };
+
+  const toggleAreaVenda = () => {
+    if (!auditor) return onRequireAuditor();
+    const next = !product.naAreaVenda;
+    onUpdate({
+      ...product,
+      naAreaVenda: next,
+      areaVendaAuditor: next ? auditor : undefined,
+      areaVendaData: next ? new Date().toISOString() : undefined,
     });
   };
 
@@ -47,6 +61,9 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
       qtdEncontrada: undefined,
       auditor: undefined,
       data: undefined,
+      naAreaVenda: false,
+      areaVendaAuditor: undefined,
+      areaVendaData: undefined,
     });
     setConfirming(false);
   };
@@ -63,25 +80,43 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
     <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <PackageSearch className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="font-mono text-sm font-semibold">{product.codigo}</span>
+            {product.codigoBarras && (
+              <span className="font-mono text-xs text-muted-foreground">
+                · {product.codigoBarras}
+              </span>
+            )}
           </div>
           <p className="text-sm mt-1 break-words">{product.descricao}</p>
           <p className="text-xs text-muted-foreground mt-1">
             Qtd esperada: <span className="font-medium">{product.quantidade}</span>
           </p>
         </div>
-        {statusBadge()}
+        <div className="flex flex-col items-end gap-1">
+          {statusBadge()}
+          {product.naAreaVenda && (
+            <Badge className="bg-blue-600 hover:bg-blue-600">
+              <Store className="h-3 w-3" /> Na área
+            </Badge>
+          )}
+        </div>
       </div>
 
       {product.status !== "pending" && (
-        <div className="text-xs text-muted-foreground border-t pt-2">
+        <div className="text-xs text-muted-foreground border-t pt-2 space-y-0.5">
           {product.status === "found" && (
             <p>Encontrado: <span className="font-medium text-foreground">{product.qtdEncontrada}</span></p>
           )}
           <p>Por: <span className="font-medium text-foreground">{product.auditor}</span></p>
           <p>Em: {product.data && new Date(product.data).toLocaleString("pt-BR")}</p>
+          {product.naAreaVenda && (
+            <p className="text-blue-700">
+              Na área de venda por <span className="font-medium">{product.areaVendaAuditor}</span>
+              {product.areaVendaData && ` em ${new Date(product.areaVendaData).toLocaleString("pt-BR")}`}
+            </p>
+          )}
         </div>
       )}
 
@@ -115,6 +150,22 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
             Cancelar
           </Button>
         </div>
+      )}
+
+      {product.status === "found" && (
+        <Button
+          variant={product.naAreaVenda ? "secondary" : "default"}
+          size="sm"
+          onClick={toggleAreaVenda}
+          className={
+            product.naAreaVenda
+              ? "w-full"
+              : "w-full bg-blue-600 hover:bg-blue-700 text-white"
+          }
+        >
+          <Store className="h-4 w-4" />
+          {product.naAreaVenda ? "Remover da área de venda" : "Colocar na área de venda"}
+        </Button>
       )}
 
       {product.status !== "pending" && (
