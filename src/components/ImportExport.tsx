@@ -2,7 +2,7 @@ import { useRef } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Upload, Download, Trash2 } from "lucide-react";
-import { Product } from "@/lib/auditStorage";
+import { Product, Sessao, newId } from "@/lib/auditStorage";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -15,11 +15,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { syncSessao, syncAll } from "@/lib/syncService";
+import { getServerUrl } from "@/lib/serverApi";
 
 interface Props {
   products: Product[];
-  onImport: (products: Product[]) => void;
+  onImport: (products: Product[], sessao: Sessao) => void;
   onClear: () => void;
+  sessao: Sessao | null;
 }
 
 const pickField = (row: Record<string, unknown>, candidates: string[]) => {
@@ -31,7 +34,7 @@ const pickField = (row: Record<string, unknown>, candidates: string[]) => {
   return undefined;
 };
 
-export const ImportExport = ({ products, onImport, onClear }: Props) => {
+export const ImportExport = ({ products, onImport, onClear, sessao }: Props) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -46,28 +49,59 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
         return;
       }
 
-      const imported: Product[] = rows.map((row, i) => {
-        const codigo = String(pickField(row, ["codigo", "código", "code", "cod"]) ?? "").trim();
-        const descricao = String(
-          pickField(row, ["descricao", "descrição", "description", "desc", "produto"]) ?? "",
-        ).trim();
-        const qtdRaw = pickField(row, ["quantidade", "qtd", "qty", "quantity"]);
-        const quantidade = Number(qtdRaw) || 0;
-        const codigoBarras = String(
-          pickField(row, ["codigo de barras", "código de barras", "ean", "barcode", "gtin", "codbarras"]) ?? "",
-        ).trim() || undefined;
-        return {
-          id: `${codigo}-${i}-${Date.now()}`,
-          codigo,
-          codigoBarras,
-          descricao,
-          quantidade,
-          status: "pending" as const,
-        };
-      }).filter((p) => p.codigo || p.descricao);
+      const sessaoId = newId();
+      const novaSessao: Sessao = {
+        id: sessaoId,
+        nome: file.name.replace(/\.xlsx?$/i, ""),
+        criado_em: new Date().toISOString(),
+        total: rows.length,
+      };
 
-      onImport(imported);
-      toast.success(`${imported.length} produtos importados`);
+      const imported: Product[] = rows
+        .map((row, i) => {
+          const codigo = String(pickField(row, ["codigo", "código", "code", "cod"]) ?? "").trim();
+          const descricao = String(
+            pickField(row, ["descricao", "descrição", "description", "desc", "produto"]) ?? "",
+          ).trim();
+          const qtdRaw = pickField(row, ["quantidade", "qtd", "qty", "quantity"]);
+          const quantidade = Number(qtdRaw) || 0;
+          const codigoBarras =
+            String(
+              pickField(row, [
+                "codigo de barras",
+                "código de barras",
+                "ean",
+                "barcode",
+                "gtin",
+                "codbarras",
+              ]) ?? "",
+            ).trim() || undefined;
+          return {
+            id: `${sessaoId}-${codigo || i}-${i}`,
+            sessaoId,
+            codigo,
+            codigoBarras,
+            descricao,
+            quantidade,
+            status: "pending" as const,
+          };
+        })
+        .filter((p) => p.codigo || p.descricao);
+
+      onImport(imported, novaSessao);
+      toast.success(`${imported.length} produtos importados (sessão ${novaSessao.nome})`);
+
+      // Envia ao servidor (se configurado)
+      if (getServerUrl()) {
+        await syncSessao(novaSessao);
+        try {
+          await syncAll(novaSessao, imported);
+          toast.success("Sessão sincronizada com o servidor");
+        } catch (e) {
+          console.warn(e);
+          toast.error("Não foi possível sincronizar com o servidor");
+        }
+      }
     } catch (err) {
       console.error(err);
       toast.error("Erro ao ler o arquivo");
@@ -92,11 +126,13 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
       "Na Área de Venda": p.naAreaVenda ? "Sim" : "Não",
       "Área Venda Por": p.areaVendaAuditor ?? "",
       "Área Venda Em": p.areaVendaData ? new Date(p.areaVendaData).toLocaleString("pt-BR") : "",
+      "Tem Foto": p.fotoId ? "Sim" : "Não",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Auditoria");
-    XLSX.writeFile(wb, `auditoria-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const nome = sessao?.nome || "auditoria";
+    XLSX.writeFile(wb, `${nome}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
@@ -129,9 +165,9 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Limpar todos os produtos?</AlertDialogTitle>
+            <AlertDialogTitle>Limpar sessão atual?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação remove todos os produtos e auditorias salvos no celular.
+              Remove os produtos da auditoria atual no celular. O histórico no servidor é preservado.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
