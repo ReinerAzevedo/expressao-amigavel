@@ -58,7 +58,7 @@ export const ImportExport = ({ products, onImport, onClear }: Props) => {
           codigo,
           descricao,
           quantidade,
-          status: "pending",
+          status: "pending" as const,
         };
       }).filter((p) => p.codigo || p.descricao);
 
