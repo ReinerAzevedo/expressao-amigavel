@@ -1,37 +1,70 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Product,
   AuditStatus,
+  Sessao,
   loadProducts,
   saveProducts,
   getAuditor,
   setAuditor as persistAuditor,
   clearProducts,
+  getSessao,
+  setSessao as persistSessao,
 } from "@/lib/auditStorage";
 import { AuditorBar } from "@/components/AuditorBar";
 import { ImportExport } from "@/components/ImportExport";
 import { ProductCard } from "@/components/ProductCard";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { ServerSettings } from "@/components/ServerSettings";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, ClipboardList, ScanBarcode, X } from "lucide-react";
+import {
+  Search,
+  ClipboardList,
+  ScanBarcode,
+  X,
+  Settings,
+  Database,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { toast } from "sonner";
+import { getServerUrl, ping } from "@/lib/serverApi";
 
 type Filter = "all" | AuditStatus | "area_venda";
 
 const Index = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [sessao, setSessaoState] = useState<Sessao | null>(null);
   const [auditor, setAuditorState] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
     setProducts(loadProducts());
     setAuditorState(getAuditor());
+    setSessaoState(getSessao());
   }, []);
+
+  const checkServer = async () => {
+    if (!getServerUrl()) {
+      setServerOnline(null);
+      return;
+    }
+    setServerOnline(await ping());
+  };
+
+  useEffect(() => {
+    checkServer();
+    const id = setInterval(checkServer, 30000);
+    return () => clearInterval(id);
+  }, [settingsOpen]);
 
   const persist = (next: Product[]) => {
     setProducts(next);
@@ -45,6 +78,19 @@ const Index = () => {
 
   const updateProduct = (p: Product) => {
     persist(products.map((x) => (x.id === p.id ? p : x)));
+  };
+
+  const handleImport = (imported: Product[], novaSessao: Sessao) => {
+    persist(imported);
+    persistSessao(novaSessao);
+    setSessaoState(novaSessao);
+  };
+
+  const handleClear = () => {
+    clearProducts();
+    setProducts([]);
+    setSessaoState(null);
+    toast.success("Sessão atual limpa");
   };
 
   const stats = useMemo(() => {
@@ -96,12 +142,44 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-8">
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <h1 className="flex items-center gap-2 text-xl font-bold">
-            <ClipboardList className="h-6 w-6 text-primary" />
-            Auditoria de Produtos
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-bold min-w-0">
+            <ClipboardList className="h-6 w-6 text-primary shrink-0" />
+            <span className="truncate">Auditoria</span>
           </h1>
+          <div className="flex items-center gap-1">
+            {getServerUrl() ? (
+              serverOnline ? (
+                <span title="Servidor online" className="flex items-center text-green-600">
+                  <Wifi className="h-4 w-4" />
+                </span>
+              ) : (
+                <span title="Servidor offline" className="flex items-center text-destructive">
+                  <WifiOff className="h-4 w-4" />
+                </span>
+              )
+            ) : null}
+            <Button variant="ghost" size="icon" asChild aria-label="Histórico">
+              <Link to="/historico">
+                <Database className="h-5 w-5" />
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Configurações do servidor"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
+        {sessao && (
+          <div className="max-w-2xl mx-auto px-4 pb-2 text-xs text-muted-foreground truncate">
+            Sessão: <span className="font-medium text-foreground">{sessao.nome}</span> ·{" "}
+            {new Date(sessao.criado_em).toLocaleDateString("pt-BR")}
+          </div>
+        )}
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
@@ -109,14 +187,9 @@ const Index = () => {
 
         <ImportExport
           products={products}
-          onImport={(p) => {
-            persist(p);
-          }}
-          onClear={() => {
-            clearProducts();
-            setProducts([]);
-            toast.success("Lista limpa");
-          }}
+          sessao={sessao}
+          onImport={handleImport}
+          onClear={handleClear}
         />
 
         {products.length > 0 && (
@@ -226,6 +299,11 @@ const Index = () => {
               <strong>descrição</strong>, <strong>quantidade</strong> e opcionalmente{" "}
               <strong>código de barras</strong>.
             </p>
+            {!getServerUrl() && (
+              <p className="text-xs text-muted-foreground px-6 pt-2">
+                💡 Configure o servidor no PC (engrenagem) para acumular histórico e fotos.
+              </p>
+            )}
           </div>
         )}
       </main>
@@ -235,6 +313,8 @@ const Index = () => {
         onClose={() => setScannerOpen(false)}
         onDetected={handleBarcode}
       />
+
+      <ServerSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 };
