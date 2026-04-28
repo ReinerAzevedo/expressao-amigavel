@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { Product } from "@/lib/auditStorage";
+import { Product, saveFotoLocal, newId } from "@/lib/auditStorage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, RotateCcw, PackageSearch, Store } from "lucide-react";
+import { Check, X, RotateCcw, PackageSearch, Store, Camera, Image as ImageIcon } from "lucide-react";
+import { PhotoCapture } from "./PhotoCapture";
+import { PhotoViewer } from "./PhotoViewer";
+import { syncProduct, syncFoto } from "@/lib/syncService";
+import { toast } from "sonner";
 
 interface Props {
   product: Product;
@@ -15,11 +19,18 @@ interface Props {
 export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Props) => {
   const [qtd, setQtd] = useState<string>(String(product.qtdEncontrada ?? product.quantidade));
   const [confirming, setConfirming] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
+
+  const persist = async (p: Product) => {
+    onUpdate(p);
+    syncProduct(p);
+  };
 
   const markFound = () => {
     if (!auditor) return onRequireAuditor();
     const n = Number(qtd);
-    onUpdate({
+    persist({
       ...product,
       status: "found",
       qtdEncontrada: isNaN(n) ? 0 : n,
@@ -31,7 +42,7 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
 
   const markNotFound = () => {
     if (!auditor) return onRequireAuditor();
-    onUpdate({
+    persist({
       ...product,
       status: "not_found",
       qtdEncontrada: undefined,
@@ -40,22 +51,46 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
       naAreaVenda: false,
       areaVendaAuditor: undefined,
       areaVendaData: undefined,
+      fotoId: undefined,
     });
   };
 
-  const toggleAreaVenda = () => {
+  const requestAreaVenda = () => {
     if (!auditor) return onRequireAuditor();
-    const next = !product.naAreaVenda;
-    onUpdate({
+    if (product.naAreaVenda) {
+      // Remover (não exige foto)
+      persist({
+        ...product,
+        naAreaVenda: false,
+        areaVendaAuditor: undefined,
+        areaVendaData: undefined,
+        fotoId: undefined,
+      });
+    } else {
+      // Exigir foto
+      setPhotoOpen(true);
+    }
+  };
+
+  const onPhotoCaptured = async (dataUrl: string, bytes: number) => {
+    const id = newId();
+    saveFotoLocal(id, dataUrl);
+    setPhotoOpen(false);
+    persist({
       ...product,
-      naAreaVenda: next,
-      areaVendaAuditor: next ? auditor : undefined,
-      areaVendaData: next ? new Date().toISOString() : undefined,
+      naAreaVenda: true,
+      areaVendaAuditor: auditor,
+      areaVendaData: new Date().toISOString(),
+      fotoId: id,
     });
+    const ok = await syncFoto(id, dataUrl);
+    toast.success(
+      `Foto salva (${(bytes / 1024).toFixed(0)} KB)${ok ? " e enviada ao servidor" : " (apenas local)"}`,
+    );
   };
 
   const reset = () => {
-    onUpdate({
+    persist({
       ...product,
       status: "pending",
       qtdEncontrada: undefined,
@@ -64,6 +99,7 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
       naAreaVenda: false,
       areaVendaAuditor: undefined,
       areaVendaData: undefined,
+      fotoId: undefined,
     });
     setConfirming(false);
   };
@@ -112,10 +148,22 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
           <p>Por: <span className="font-medium text-foreground">{product.auditor}</span></p>
           <p>Em: {product.data && new Date(product.data).toLocaleString("pt-BR")}</p>
           {product.naAreaVenda && (
-            <p className="text-blue-700">
-              Na área de venda por <span className="font-medium">{product.areaVendaAuditor}</span>
-              {product.areaVendaData && ` em ${new Date(product.areaVendaData).toLocaleString("pt-BR")}`}
-            </p>
+            <div className="flex items-center justify-between gap-2 text-blue-700">
+              <span>
+                Na área por <span className="font-medium">{product.areaVendaAuditor}</span>
+                {product.areaVendaData && ` em ${new Date(product.areaVendaData).toLocaleString("pt-BR")}`}
+              </span>
+              {product.fotoId && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => setViewing(product.fotoId!)}
+                >
+                  <ImageIcon className="h-4 w-4" /> Ver foto
+                </Button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -156,15 +204,22 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
         <Button
           variant={product.naAreaVenda ? "secondary" : "default"}
           size="sm"
-          onClick={toggleAreaVenda}
+          onClick={requestAreaVenda}
           className={
             product.naAreaVenda
               ? "w-full"
               : "w-full bg-blue-600 hover:bg-blue-700 text-white"
           }
         >
-          <Store className="h-4 w-4" />
-          {product.naAreaVenda ? "Remover da área de venda" : "Colocar na área de venda"}
+          {product.naAreaVenda ? (
+            <>
+              <Store className="h-4 w-4" /> Remover da área de venda
+            </>
+          ) : (
+            <>
+              <Camera className="h-4 w-4" /> Colocar na área (com foto)
+            </>
+          )}
         </Button>
       )}
 
@@ -173,6 +228,13 @@ export const ProductCard = ({ product, auditor, onUpdate, onRequireAuditor }: Pr
           <RotateCcw className="h-4 w-4" /> Refazer auditoria
         </Button>
       )}
+
+      <PhotoCapture
+        open={photoOpen}
+        onClose={() => setPhotoOpen(false)}
+        onCaptured={onPhotoCaptured}
+      />
+      <PhotoViewer fotoId={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 };
