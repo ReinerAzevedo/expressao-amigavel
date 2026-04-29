@@ -243,11 +243,22 @@ app.get("/api/historico/:codigo", (req, res) => {
 
 // Recorrência: produtos que mais aparecem ou que mais ficam pendentes
 app.get("/api/recorrencia", (req, res) => {
-  const status = req.query.status; // 'pending' | 'not_found' | 'all'
-  const where =
-    status && status !== "all"
-      ? `WHERE status = '${status === "pending_or_missing" ? "pending' OR status = 'not_found" : status}'`
-      : "";
+  const status = req.query.status;
+  const ALLOWED = ["all", "pending", "not_found", "found", "pending_or_missing"];
+  if (status && !ALLOWED.includes(status)) {
+    return res.status(400).json({ error: "status inválido" });
+  }
+
+  let where = "";
+  let params = [];
+  if (status === "pending_or_missing") {
+    where = "WHERE status = ? OR status = ?";
+    params = ["pending", "not_found"];
+  } else if (status && status !== "all") {
+    where = "WHERE status = ?";
+    params = [status];
+  }
+
   const rows = db
     .prepare(
       `SELECT codigo, descricao,
@@ -263,7 +274,7 @@ app.get("/api/recorrencia", (req, res) => {
       ORDER BY ocorrencias DESC, vezes_nao_encontrado DESC
       LIMIT 500`,
     )
-    .all();
+    .all(...params);
   res.json(rows);
 });
 
