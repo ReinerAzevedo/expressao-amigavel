@@ -111,6 +111,31 @@ if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
 }
 
+// Página de boas-vindas com QR Code (útil quando ainda não há build em public/
+// ou para escanear com o celular). Disponível em http://<ip>:4000/qr
+app.get("/qr", (req, res) => {
+  const host = req.headers.host;
+  const url = `http://${host}/`;
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+  res.send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Servidor de Auditoria</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px}
+.card{background:#1e293b;padding:32px;border-radius:16px;text-align:center;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+h1{margin:0 0 8px;font-size:22px}p{color:#94a3b8;margin:8px 0}
+.url{background:#0f172a;padding:12px;border-radius:8px;font-family:monospace;font-size:18px;color:#60a5fa;margin:16px 0;word-break:break-all}
+img{background:#fff;padding:12px;border-radius:12px;margin:16px 0}
+small{color:#64748b;display:block;margin-top:16px}</style></head>
+<body><div class="card">
+<h1>📱 Servidor de Auditoria</h1>
+<p>Aponte a câmera do celular para o QR Code:</p>
+<img src="${qrSrc}" alt="QR Code" width="300" height="300">
+<div class="url">${url}</div>
+<p>Ou digite o endereço acima no navegador do celular.</p>
+<small>Celular e PC precisam estar na mesma rede Wi-Fi.</small>
+</div></body></html>`);
+});
+
 // Entrega o token ao frontend hospedado pelo próprio servidor. O CORS acima
 // só libera same-origin, então sites externos não conseguem ler o token.
 app.get("/api/token", (_req, res) => {
