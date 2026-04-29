@@ -20,13 +20,26 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const crypto = require("crypto");
 
 const PORT = 4000;
 const DATA_DIR = __dirname;
 const DB_PATH = path.join(DATA_DIR, "dados.db");
 const FOTOS_DIR = path.join(DATA_DIR, "fotos");
+const TOKEN_PATH = path.join(DATA_DIR, "token.txt");
 
 if (!fs.existsSync(FOTOS_DIR)) fs.mkdirSync(FOTOS_DIR, { recursive: true });
+
+// Token de acesso - gerado automaticamente na primeira execução.
+// Fica salvo em token.txt (mesma pasta). Apague o arquivo para gerar um novo.
+let API_TOKEN;
+if (fs.existsSync(TOKEN_PATH)) {
+  API_TOKEN = fs.readFileSync(TOKEN_PATH, "utf8").trim();
+}
+if (!API_TOKEN) {
+  API_TOKEN = crypto.randomBytes(24).toString("hex");
+  fs.writeFileSync(TOKEN_PATH, API_TOKEN, "utf8");
+}
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
