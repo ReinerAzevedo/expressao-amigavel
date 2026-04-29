@@ -62,6 +62,20 @@ export const ServerSettings = ({ open, onClose }: Props) => {
             autoCorrect="off"
           />
 
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">
+              Token de acesso (mostrado pelo servidor ao iniciar; opcional se você
+              acessa pelo endereço do próprio PC — o app busca sozinho)
+            </label>
+            <Input
+              placeholder="Cole aqui se necessário"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+          </div>
+
           <Button variant="outline" onClick={test} disabled={!url || testing} className="w-full">
             {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Testar conexão"}
           </Button>
