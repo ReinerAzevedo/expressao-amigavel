@@ -1,42 +1,85 @@
 # Servidor de Auditoria — PC Windows
 
-Pequeno servidor que roda no seu PC e guarda o histórico de auditorias e as fotos
-enviadas pelo celular (na mesma rede Wi-Fi).
+Pequeno servidor que roda no seu PC e:
+- Guarda histórico de auditorias e fotos (banco SQLite local)
+- **Também serve o app** para o celular (resolve o problema de HTTPS/HTTP)
+
+---
+
+## ⚠️ Por que NÃO usar o link `https://...lovable.app` no celular
+
+O Lovable serve o Preview em **HTTPS**, mas seu servidor é **HTTP**.
+Navegadores bloqueiam essa mistura ("Mixed Content") e você vê
+"Failed to fetch" mesmo com tudo configurado certo.
+
+**Solução:** rodar o app a partir do próprio PC. O celular acessa
+**um único endereço** (ex: `http://192.168.10.73:4000`) e tudo funciona.
+
+---
 
 ## ✅ Pré-requisitos (uma vez só)
 
-1. **Instale o Node.js** (versão LTS): https://nodejs.org
-   - Durante a instalação, pode clicar **Next** em tudo. Deixe marcada a opção
-     "Automatically install the necessary tools" se aparecer.
+1. **Instale o Node.js LTS**: https://nodejs.org
+   (Pode clicar Next em tudo durante a instalação.)
 
-## 🚀 Como rodar
+---
 
-1. Abra o **Prompt de Comando** dentro desta pasta (`server-windows`).
-   - Dica: na pasta, segure **Shift + clique direito** → "Abrir janela do PowerShell aqui"
-2. Instale as dependências (somente na primeira vez):
+## 🚀 Passo a passo
+
+### 1) Instalar dependências (só na primeira vez)
+
+Abra esta pasta no Explorer, segure **Shift + clique direito** em um espaço vazio
+→ "Abrir janela do PowerShell aqui" → digite:
+
+```
+npm install
+```
+
+### 2) Colocar o app dentro da pasta `public/`
+
+Você precisa do **build do app**. No Lovable:
+
+1. Clique em **Publish** (canto superior direito).
+2. Após publicar, clique em **Download Code** (ou peça ao Lovable o link do build).
+3. Em qualquer PC com Node, dentro da pasta do projeto baixado, rode:
    ```
    npm install
+   npm run build
    ```
-3. Inicie o servidor:
-   ```
-   npm start
-   ```
-4. Vai aparecer algo como:
-   ```
-   Servidor de Auditoria iniciado!
-   Porta: 4000
-   Endereços para usar no celular:
-     →  http://192.168.1.10:4000
-   ```
-5. **Anote o endereço** (ex: `http://192.168.1.10:4000`).
+4. Isso cria uma pasta `dist/`. Copie **todo o conteúdo** dela para
+   `server-windows/public/` (crie a pasta `public` se não existir).
 
-## 📱 Configurar no celular
+> 💡 Atalho: peça ao Lovable "me gere um zip do build pronto" e ele já entrega
+> a pasta `dist` zipada — basta descompactar dentro de `server-windows/public/`.
+
+### 3) Iniciar o servidor
+
+```
+npm start
+```
+
+Vai aparecer:
+```
+========================================
+  Servidor de Auditoria iniciado!
+========================================
+  Porta: 4000
+  Endereços para usar no celular:
+    →  http://192.168.10.73:4000
+========================================
+```
+
+### 4) Abrir no celular
 
 1. Conecte o celular **na mesma rede Wi-Fi** do PC.
-2. Abra o app de auditoria.
-3. Toque no ícone de **engrenagem** (Configurações) no topo.
-4. Cole o endereço do servidor e toque em **Testar conexão**.
-5. Se aparecer ✅ "Servidor conectado", pronto!
+2. Abra o navegador (Chrome) e digite o endereço exibido acima
+   (ex: `http://192.168.10.73:4000`).
+3. **Pronto!** O app já está conectado ao servidor automaticamente —
+   não precisa configurar IP nas Configurações.
+4. Para virar um "ícone no celular": no Chrome, menu ⋮ →
+   **Adicionar à tela inicial**.
+
+---
 
 ## 🔥 Liberar no Firewall
 
@@ -47,19 +90,27 @@ Se você fechou sem permitir:
 - **Painel de Controle** → **Sistema e Segurança** → **Firewall do Windows Defender**
 - → **Permitir um aplicativo** → procure **Node.js** → marque **Privada** ✓
 
-## 💾 Onde ficam meus dados?
+---
 
-- Banco de dados: arquivo `dados.db` nesta pasta
-- Fotos: pasta `fotos/` nesta pasta
-- **Faça backup** copiando essas duas coisas de tempos em tempos.
+## 💾 Backup dos dados
+
+- Banco: `dados.db` (nesta pasta)
+- Fotos: pasta `fotos/`
+
+Copie os dois para um pendrive de tempos em tempos.
+
+---
 
 ## ❓ Problemas comuns
 
 **"npm não é reconhecido"** → Reinstale o Node.js e reinicie o PC.
 
-**Celular não conecta** →
-- Confira se está no mesmo Wi-Fi
-- Confira o IP com `ipconfig` no Prompt (procure "IPv4")
-- Tente desativar temporariamente o Firewall para testar
+**Celular abre o endereço mas não carrega o app** →
+A pasta `public/` está vazia. Volte ao Passo 2.
+
+**Celular não abre o endereço** →
+- Mesmo Wi-Fi? (não pode ser Wi-Fi de visitantes/guest)
+- Confira o IP com `ipconfig` no PowerShell (procure "IPv4")
+- Teste desativar o Firewall só para confirmar
 
 **Quero mudar a porta** → Edite `PORT = 4000` no início de `server.js`.
