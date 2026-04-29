@@ -67,7 +67,16 @@ Vai aparecer:
   Endereços para usar no celular:
     →  http://192.168.10.73:4000
 ========================================
+  Token de acesso: a1b2c3d4e5f6...
+  (salvo em: .../server-windows/token.txt)
+========================================
 ```
+
+> 🔐 **Sobre o token:** ele é gerado automaticamente na primeira vez e protege
+> seu servidor contra acesso não autorizado de outros aparelhos na rede.
+> Quando você abre o app pelo endereço do próprio PC (passo 4 abaixo), o app
+> busca o token sozinho — você não precisa fazer nada. Se quiser **forçar um
+> token novo**, apague o arquivo `token.txt` e reinicie o servidor.
 
 ### 4) Abrir no celular
 
