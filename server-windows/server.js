@@ -78,6 +78,12 @@ app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 app.use("/fotos", express.static(FOTOS_DIR));
 
+// Serve o frontend (pasta ./public com o build do app React)
+const PUBLIC_DIR = path.join(DATA_DIR, "public");
+if (fs.existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+}
+
 app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, app: "auditoria-server", versao: "1.0.0" });
 });
