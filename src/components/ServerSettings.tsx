@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Server, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { getServerUrl, setServerUrl, ping } from "@/lib/serverApi";
+import { getServerUrl, setServerUrl, ping, getServerToken, setServerToken } from "@/lib/serverApi";
 import { toast } from "sonner";
 
 interface Props {
@@ -13,12 +13,14 @@ interface Props {
 
 export const ServerSettings = ({ open, onClose }: Props) => {
   const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState<"unknown" | "ok" | "fail">("unknown");
 
   useEffect(() => {
     if (open) {
       setUrl(getServerUrl());
+      setToken(getServerToken());
       setStatus("unknown");
     }
   }, [open]);
@@ -33,6 +35,7 @@ export const ServerSettings = ({ open, onClose }: Props) => {
 
   const save = async () => {
     setServerUrl(url);
+    setServerToken(token);
     toast.success(url ? "Servidor configurado" : "Servidor desconectado");
     onClose();
   };
