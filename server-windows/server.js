@@ -348,5 +348,8 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log("  Endereços para usar no celular:");
   for (const ip of ips) console.log(`    →  http://${ip}:${PORT}`);
   if (ips.length === 0) console.log("    (nenhum IP de rede detectado)");
+  console.log("========================================");
+  console.log(`  Token de acesso: ${API_TOKEN}`);
+  console.log(`  (salvo em: ${TOKEN_PATH})`);
   console.log("========================================\n");
 });
