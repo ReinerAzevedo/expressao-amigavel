@@ -262,6 +262,13 @@ function rowToProduto(r) {
   };
 }
 
+// SPA fallback: qualquer rota não-API devolve o index.html do app
+app.get(/^\/(?!api\/|fotos\/).*/, (_req, res, next) => {
+  const indexPath = path.join(PUBLIC_DIR, "index.html");
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  next();
+});
+
 // --- Start -----------------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
   const ips = [];
