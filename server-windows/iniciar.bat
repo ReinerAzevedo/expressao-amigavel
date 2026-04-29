@@ -18,9 +18,9 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
 set "IP=%IP: =%"
 
 if defined IP (
-  set "URL=http://%IP%:4000"
+  set "URL=http://%IP%:4000/qr"
 ) else (
-  set "URL=http://localhost:4000"
+  set "URL=http://localhost:4000/qr"
 )
 
 echo ========================================
@@ -30,7 +30,8 @@ echo  Endereco para o celular:
 echo     %URL%
 echo ========================================
 echo.
-echo Abrindo a pagina no navegador (com QR Code)...
+echo Abrindo a pagina com QR Code no navegador (aguarde 3s)...
+timeout /t 3 /nobreak >nul
 start "" "%URL%"
 
 echo.
