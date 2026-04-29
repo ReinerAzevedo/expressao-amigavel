@@ -5,7 +5,19 @@
 
 const KEY_URL = "audit:serverUrl";
 
-export const getServerUrl = () => localStorage.getItem(KEY_URL) || "";
+/** Detecta se o app está sendo servido pelo próprio servidor local (não-Lovable). */
+const isSelfHosted = () => {
+  if (typeof window === "undefined") return false;
+  const h = window.location.hostname;
+  return !h.endsWith("lovable.app") && !h.endsWith("lovable.dev") && h !== "localhost";
+};
+
+export const getServerUrl = () => {
+  const saved = localStorage.getItem(KEY_URL);
+  if (saved) return saved;
+  if (isSelfHosted()) return window.location.origin;
+  return "";
+};
 export const setServerUrl = (url: string) => {
   const trimmed = url.trim().replace(/\/+$/, "");
   if (trimmed) localStorage.setItem(KEY_URL, trimmed);

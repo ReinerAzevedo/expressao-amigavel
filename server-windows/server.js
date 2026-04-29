@@ -78,6 +78,12 @@ app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 app.use("/fotos", express.static(FOTOS_DIR));
 
+// Serve o frontend (pasta ./public com o build do app React)
+const PUBLIC_DIR = path.join(DATA_DIR, "public");
+if (fs.existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+}
+
 app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, app: "auditoria-server", versao: "1.0.0" });
 });
@@ -255,6 +261,13 @@ function rowToProduto(r) {
     sessaoData: r.sessao_data,
   };
 }
+
+// SPA fallback: qualquer rota não-API devolve o index.html do app
+app.get(/^\/(?!api\/|fotos\/).*/, (_req, res, next) => {
+  const indexPath = path.join(PUBLIC_DIR, "index.html");
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  next();
+});
 
 // --- Start -----------------------------------------------------------------
 app.listen(PORT, "0.0.0.0", () => {
