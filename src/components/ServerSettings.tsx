@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Server, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { getServerUrl, setServerUrl, ping } from "@/lib/serverApi";
+import { getServerUrl, setServerUrl, ping, getServerToken, setServerToken } from "@/lib/serverApi";
 import { toast } from "sonner";
 
 interface Props {
@@ -13,12 +13,14 @@ interface Props {
 
 export const ServerSettings = ({ open, onClose }: Props) => {
   const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState<"unknown" | "ok" | "fail">("unknown");
 
   useEffect(() => {
     if (open) {
       setUrl(getServerUrl());
+      setToken(getServerToken());
       setStatus("unknown");
     }
   }, [open]);
@@ -33,6 +35,7 @@ export const ServerSettings = ({ open, onClose }: Props) => {
 
   const save = async () => {
     setServerUrl(url);
+    setServerToken(token);
     toast.success(url ? "Servidor configurado" : "Servidor desconectado");
     onClose();
   };
@@ -58,6 +61,20 @@ export const ServerSettings = ({ open, onClose }: Props) => {
             autoCapitalize="off"
             autoCorrect="off"
           />
+
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">
+              Token de acesso (mostrado pelo servidor ao iniciar; opcional se você
+              acessa pelo endereço do próprio PC — o app busca sozinho)
+            </label>
+            <Input
+              placeholder="Cole aqui se necessário"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+          </div>
 
           <Button variant="outline" onClick={test} disabled={!url || testing} className="w-full">
             {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Testar conexão"}

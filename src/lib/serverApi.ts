@@ -1,9 +1,16 @@
 /**
  * Cliente para o servidor local (PC Windows).
  * URL fica salva em localStorage. Tudo opcional — app funciona sem servidor.
+ *
+ * Autenticação: o servidor gera um token aleatório na primeira execução e
+ * o expõe em GET /api/token (apenas para requisições same-origin). O app
+ * busca esse token automaticamente quando hospedado pelo próprio servidor.
+ * Para acesso a partir de outra origem (ex.: Preview do Lovable), o token
+ * pode ser informado manualmente nas Configurações.
  */
 
 const KEY_URL = "audit:serverUrl";
+const KEY_TOKEN = "audit:serverToken";
 
 /** Detecta se o app está sendo servido pelo próprio servidor local (não-Lovable). */
 const isSelfHosted = () => {
@@ -24,17 +31,60 @@ export const setServerUrl = (url: string) => {
   else localStorage.removeItem(KEY_URL);
 };
 
+export const getServerToken = () => localStorage.getItem(KEY_TOKEN) || "";
+export const setServerToken = (token: string) => {
+  const t = token.trim();
+  if (t) localStorage.setItem(KEY_TOKEN, t);
+  else localStorage.removeItem(KEY_TOKEN);
+};
+
 const baseUrl = () => {
   const u = getServerUrl();
   if (!u) throw new Error("Servidor não configurado");
   return u;
 };
 
+/** Tenta obter o token automaticamente (só funciona em same-origin). */
+const fetchTokenAuto = async (): Promise<string> => {
+  const u = getServerUrl();
+  if (!u) return "";
+  try {
+    const res = await fetch(`${u}/api/token`);
+    if (!res.ok) return "";
+    const data = await res.json();
+    if (data?.token) {
+      setServerToken(data.token);
+      return data.token;
+    }
+  } catch {}
+  return "";
+};
+
+const authHeaders = (): Record<string, string> => {
+  const t = getServerToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+};
+
 const req = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const res = await fetch(`${baseUrl()}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
+  let token = getServerToken();
+  if (!token) token = await fetchTokenAuto();
+
+  const doFetch = async () =>
+    fetch(`${baseUrl()}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...(init?.headers || {}),
+      },
+    });
+
+  let res = await doFetch();
+  if (res.status === 401) {
+    // Token pode ter mudado (servidor reiniciado com novo token.txt). Tenta refetch.
+    const fresh = await fetchTokenAuto();
+    if (fresh) res = await doFetch();
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return (await res.json()) as T;
 };
@@ -116,9 +166,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ id, dataUrl }),
     }),
-  fotoUrl: (id: string) => `${baseUrl()}/fotos/${id}`,
+  fotoUrl: (id: string) => {
+    const t = getServerToken();
+    return `${baseUrl()}/fotos/${id}${t ? `?t=${encodeURIComponent(t)}` : ""}`;
+  },
   fotoUrlAny: (foto: { id?: string; url?: string }) => {
-    if (foto.url) return `${baseUrl()}${foto.url}`;
-    return `${baseUrl()}/api/fotos/${foto.id}`;
+    const t = getServerToken();
+    const q = t ? `?t=${encodeURIComponent(t)}` : "";
+    if (foto.url) return `${baseUrl()}${foto.url}${q}`;
+    return `${baseUrl()}/api/fotos/${foto.id}${q}`;
   },
 };

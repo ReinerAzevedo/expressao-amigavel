@@ -20,13 +20,26 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const crypto = require("crypto");
 
 const PORT = 4000;
 const DATA_DIR = __dirname;
 const DB_PATH = path.join(DATA_DIR, "dados.db");
 const FOTOS_DIR = path.join(DATA_DIR, "fotos");
+const TOKEN_PATH = path.join(DATA_DIR, "token.txt");
 
 if (!fs.existsSync(FOTOS_DIR)) fs.mkdirSync(FOTOS_DIR, { recursive: true });
+
+// Token de acesso - gerado automaticamente na primeira execução.
+// Fica salvo em token.txt (mesma pasta). Apague o arquivo para gerar um novo.
+let API_TOKEN;
+if (fs.existsSync(TOKEN_PATH)) {
+  API_TOKEN = fs.readFileSync(TOKEN_PATH, "utf8").trim();
+}
+if (!API_TOKEN) {
+  API_TOKEN = crypto.randomBytes(24).toString("hex");
+  fs.writeFileSync(TOKEN_PATH, API_TOKEN, "utf8");
+}
 
 const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
@@ -74,9 +87,23 @@ CREATE TABLE IF NOT EXISTS fotos (
 
 // --- App -------------------------------------------------------------------
 const app = express();
-app.use(cors({ origin: "*" }));
+
+// CORS restrito: aceita apenas requisições same-origin (frontend servido pelo
+// próprio servidor). Sem wildcard — bloqueia sites maliciosos de tentar
+// acessar o servidor da rede local via navegador.
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl, fetch same-origin direto
+      try {
+        const u = new URL(origin);
+        if (Number(u.port) === PORT) return cb(null, true);
+      } catch {}
+      return cb(new Error("Origem não permitida"));
+    },
+  }),
+);
 app.use(express.json({ limit: "10mb" }));
-app.use("/fotos", express.static(FOTOS_DIR));
 
 // Serve o frontend (pasta ./public com o build do app React)
 const PUBLIC_DIR = path.join(DATA_DIR, "public");
@@ -84,9 +111,34 @@ if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
 }
 
+// Entrega o token ao frontend hospedado pelo próprio servidor. O CORS acima
+// só libera same-origin, então sites externos não conseguem ler o token.
+app.get("/api/token", (_req, res) => {
+  res.json({ token: API_TOKEN });
+});
+
 app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, app: "auditoria-server", versao: "1.0.0" });
 });
+
+// Autenticação obrigatória para todas as rotas /api/* (exceto /ping e /token).
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (token && token === API_TOKEN) return next();
+  return res.status(401).json({ error: "Não autorizado" });
+});
+
+// Fotos protegidas por token via query string (?t=...) para funcionar em <img>.
+app.use(
+  "/fotos",
+  (req, res, next) => {
+    if (req.query.t === API_TOKEN) return next();
+    return res.status(401).send("Não autorizado");
+  },
+  express.static(FOTOS_DIR),
+);
 
 // --- Sessões ---------------------------------------------------------------
 app.get("/api/sessoes", (_req, res) => {
@@ -191,11 +243,22 @@ app.get("/api/historico/:codigo", (req, res) => {
 
 // Recorrência: produtos que mais aparecem ou que mais ficam pendentes
 app.get("/api/recorrencia", (req, res) => {
-  const status = req.query.status; // 'pending' | 'not_found' | 'all'
-  const where =
-    status && status !== "all"
-      ? `WHERE status = '${status === "pending_or_missing" ? "pending' OR status = 'not_found" : status}'`
-      : "";
+  const status = req.query.status;
+  const ALLOWED = ["all", "pending", "not_found", "found", "pending_or_missing"];
+  if (status && !ALLOWED.includes(status)) {
+    return res.status(400).json({ error: "status inválido" });
+  }
+
+  let where = "";
+  let params = [];
+  if (status === "pending_or_missing") {
+    where = "WHERE status = ? OR status = ?";
+    params = ["pending", "not_found"];
+  } else if (status && status !== "all") {
+    where = "WHERE status = ?";
+    params = [status];
+  }
+
   const rows = db
     .prepare(
       `SELECT codigo, descricao,
@@ -211,7 +274,7 @@ app.get("/api/recorrencia", (req, res) => {
       ORDER BY ocorrencias DESC, vezes_nao_encontrado DESC
       LIMIT 500`,
     )
-    .all();
+    .all(...params);
   res.json(rows);
 });
 
@@ -285,5 +348,8 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log("  Endereços para usar no celular:");
   for (const ip of ips) console.log(`    →  http://${ip}:${PORT}`);
   if (ips.length === 0) console.log("    (nenhum IP de rede detectado)");
+  console.log("========================================");
+  console.log(`  Token de acesso: ${API_TOKEN}`);
+  console.log(`  (salvo em: ${TOKEN_PATH})`);
   console.log("========================================\n");
 });
