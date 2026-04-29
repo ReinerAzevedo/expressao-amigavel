@@ -87,9 +87,23 @@ CREATE TABLE IF NOT EXISTS fotos (
 
 // --- App -------------------------------------------------------------------
 const app = express();
-app.use(cors({ origin: "*" }));
+
+// CORS restrito: aceita apenas requisições same-origin (frontend servido pelo
+// próprio servidor). Sem wildcard — bloqueia sites maliciosos de tentar
+// acessar o servidor da rede local via navegador.
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl, fetch same-origin direto
+      try {
+        const u = new URL(origin);
+        if (Number(u.port) === PORT) return cb(null, true);
+      } catch {}
+      return cb(new Error("Origem não permitida"));
+    },
+  }),
+);
 app.use(express.json({ limit: "10mb" }));
-app.use("/fotos", express.static(FOTOS_DIR));
 
 // Serve o frontend (pasta ./public com o build do app React)
 const PUBLIC_DIR = path.join(DATA_DIR, "public");
@@ -97,9 +111,34 @@ if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
 }
 
+// Entrega o token ao frontend hospedado pelo próprio servidor. O CORS acima
+// só libera same-origin, então sites externos não conseguem ler o token.
+app.get("/api/token", (_req, res) => {
+  res.json({ token: API_TOKEN });
+});
+
 app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, app: "auditoria-server", versao: "1.0.0" });
 });
+
+// Autenticação obrigatória para todas as rotas /api/* (exceto /ping e /token).
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (token && token === API_TOKEN) return next();
+  return res.status(401).json({ error: "Não autorizado" });
+});
+
+// Fotos protegidas por token via query string (?t=...) para funcionar em <img>.
+app.use(
+  "/fotos",
+  (req, res, next) => {
+    if (req.query.t === API_TOKEN) return next();
+    return res.status(401).send("Não autorizado");
+  },
+  express.static(FOTOS_DIR),
+);
 
 // --- Sessões ---------------------------------------------------------------
 app.get("/api/sessoes", (_req, res) => {
