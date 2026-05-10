@@ -25,15 +25,6 @@ interface Props {
   sessao: Sessao | null;
 }
 
-const pickField = (row: Record<string, unknown>, candidates: string[]) => {
-  const keys = Object.keys(row);
-  for (const c of candidates) {
-    const k = keys.find((k) => k.toLowerCase().trim() === c.toLowerCase());
-    if (k) return row[k];
-  }
-  return undefined;
-};
-
 export const ImportExport = ({ products, onImport, onClear, sessao }: Props) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -42,10 +33,31 @@ export const ImportExport = ({ products, onImport, onClear, sessao }: Props) => 
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf);
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+      // Lê como matriz para localizar o cabeçalho real (planilha tem ~22 linhas
+      // de relatório antes da tabela). Procura a linha que contém "Código" e
+      // "Descrição"; se não achar, assume a linha 23 (índice 22).
+      const matrix = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+        header: 1,
+        defval: "",
+        blankrows: false,
+      });
 
-      if (!rows.length) {
-        toast.error("Planilha vazia");
+      const norm = (v: unknown) =>
+        String(v ?? "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim();
+
+      let headerIdx = matrix.findIndex((r) => {
+        const cells = (r as unknown[]).map(norm);
+        return cells.includes("codigo") && cells.some((c) => c.startsWith("descric"));
+      });
+      if (headerIdx === -1) headerIdx = 22; // fallback: pula 22 linhas
+
+      const dataRows = matrix.slice(headerIdx + 1);
+      if (!dataRows.length) {
+        toast.error("Nenhuma linha de dados após o cabeçalho");
         return;
       }
 
@@ -54,28 +66,16 @@ export const ImportExport = ({ products, onImport, onClear, sessao }: Props) => 
         id: sessaoId,
         nome: file.name.replace(/\.xlsx?$/i, ""),
         criado_em: new Date().toISOString(),
-        total: rows.length,
+        total: dataRows.length,
       };
 
-      const imported: Product[] = rows
+      const imported: Product[] = dataRows
         .map((row, i) => {
-          const codigo = String(pickField(row, ["codigo", "código", "code", "cod"]) ?? "").trim();
-          const descricao = String(
-            pickField(row, ["descricao", "descrição", "description", "desc", "produto"]) ?? "",
-          ).trim();
-          const qtdRaw = pickField(row, ["quantidade", "qtd", "qty", "quantity"]);
-          const quantidade = Number(qtdRaw) || 0;
-          const codigoBarras =
-            String(
-              pickField(row, [
-                "codigo de barras",
-                "código de barras",
-                "ean",
-                "barcode",
-                "gtin",
-                "codbarras",
-              ]) ?? "",
-            ).trim() || undefined;
+          const r = row as unknown[];
+          const codigo = String(r[0] ?? "").trim();
+          const codigoBarras = String(r[1] ?? "").trim() || undefined;
+          const descricao = String(r[2] ?? "").trim();
+          const quantidade = Number(r[3]) || 0;
           return {
             id: `${sessaoId}-${codigo || i}-${i}`,
             sessaoId,
