@@ -25,15 +25,6 @@ interface Props {
   sessao: Sessao | null;
 }
 
-const pickField = (row: Record<string, unknown>, candidates: string[]) => {
-  const keys = Object.keys(row);
-  for (const c of candidates) {
-    const k = keys.find((k) => k.toLowerCase().trim() === c.toLowerCase());
-    if (k) return row[k];
-  }
-  return undefined;
-};
-
 export const ImportExport = ({ products, onImport, onClear, sessao }: Props) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
